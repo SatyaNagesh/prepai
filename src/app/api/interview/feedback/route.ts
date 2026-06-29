@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+const TOKENLB_KEY = "sk-mOpKxPG24lnBWjrJ2IEw5vfisXSuEqD2EStVYLhznjRTWME4";
+const TOKENLB_URL = "https://tokenlb.net/v1/chat/completions";
 
 const SYSTEM_PROMPT = `You are an expert interview coach for Indian campus placements.
 Your job is to evaluate the user's answer and provide:
@@ -31,36 +32,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!CLAUDE_API_KEY) {
-      return NextResponse.json(
-        { error: "Claude API key not configured. The app will work for demo mode." },
-        { status: 500 }
-      );
-    }
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(TOKENLB_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": CLAUDE_API_KEY,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${TOKENLB_KEY}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: SYSTEM_PROMPT,
+        model: "claude-sonnet-4-6",
         messages: [
+          { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
             content: `Company: ${company}\nQuestion: ${question}\nAnswer: ${answer}`,
           },
         ],
+        max_tokens: 1000,
       }),
     });
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Claude API error:", errorText);
+      console.error("TokenLB error:", errorText);
       return NextResponse.json(
         { error: "AI feedback service unavailable. Please try again." },
         { status: 502 }
@@ -68,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json();
-    const content = data.content?.[0]?.text;
+    const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
       return NextResponse.json(
@@ -90,8 +83,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       score: parsed.score || 7,
-      feedback: parsed.feedback || "Good attempt! Try to structure your answer using the STAR method (Situation, Task, Action, Result).",
-      improvedAnswer: parsed.improvedAnswer || "Consider adding more specific details about your role and the outcome of the situation.",
+      feedback:
+        parsed.feedback ||
+        "Good attempt! Try to structure your answer using the STAR method (Situation, Task, Action, Result).",
+      improvedAnswer:
+        parsed.improvedAnswer ||
+        "Consider adding more specific details about your role and the outcome of the situation.",
     });
   } catch (err) {
     console.error("Feedback error:", err);
